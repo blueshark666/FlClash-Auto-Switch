@@ -1,0 +1,58 @@
+name: Build Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'   # 仅在推送 tag 时构建，如 v1.0.0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build APK (Release)
+        run: flutter build apk --release
+
+      # ---- Signing APK ----
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE }}" | base64 --decode > keystore.jks
+
+      - name: Sign APK
+        run: |
+          cd build/app/outputs/flutter-apk/
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore ../../../keystore.jks \
+            -storepass "${{ secrets.STORE_PASSWORD }}" \
+            -keypass "${{ secrets.KEY_PASSWORD }}" \
+            app-release.apk ${{ secrets.KEY_ALIAS }}
+
+      - name: Zipalign
+        run: |
+          sudo apt-get install -y zipalign
+          zipalign -v 4 build/app/outputs/flutter-apk/app-release.apk app-release-aligned.apk
+
+      # ---- Upload to Release ----
+      - name: Upload Release APK
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app-release-aligned.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
