@@ -32,18 +32,16 @@ jobs:
       - name: Build APK (Release)
         run: flutter build apk --release
 
-      # ---- Signing APK ----
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE }}" | base64 --decode > keystore.jks
-
+      
       - name: Sign APK
         run: |
-          cd build/app/outputs/flutter-apk/
           jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
-            -keystore ../../../keystore.jks \
+            -keystore keystore.jks \
             -storepass "${{ secrets.STORE_PASSWORD }}" \
             -keypass "${{ secrets.KEY_PASSWORD }}" \
-            app-release.apk ${{ secrets.KEY_ALIAS }}
+            build/app/outputs/flutter-apk/app-release.apk ${{ secrets.KEY_ALIAS }}
 
       - name: Zipalign
         run: |
