@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.follow.clash.service"
+    namespace = "com.follow.clash.autoswitch.service"
     compileSdk = 36
 
     defaultConfig {

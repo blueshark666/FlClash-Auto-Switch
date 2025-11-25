@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.follow.clash.core"
+    namespace = "com.follow.clash.autoswitch.core"
     compileSdk = libs.versions.compileSdk.get().toInt()
     ndkVersion = libs.versions.ndkVersion.get()
 

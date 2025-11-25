@@ -48,6 +48,23 @@ class Service {
             listener.onServiceCrash(message);
           }
           break;
+        case 'message':
+          final data = call.arguments as String? ?? '';
+          try {
+            final messageData = json.decode(data) as Map<String, dynamic>;
+            final type = messageData['type'] as String?;
+            final messageContent = messageData['data'] as String?;
+            
+            if (type == 'modeUpdate' && messageContent != null) {
+              // 调用AppController的setMode方法更新界面模式
+              globalState.appController.setMode(messageContent);
+            }
+          } catch (e) {
+            if (kDebugMode) {
+              print('Error parsing message: \$e');
+            }
+          }
+          break;
         default:
           throw MissingPluginException();
       }

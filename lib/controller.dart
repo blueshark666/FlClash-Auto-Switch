@@ -851,6 +851,27 @@ class AppController {
     });
   }
 
+  void setMode(String modeName) {
+    Mode? targetMode;
+    switch (modeName.toLowerCase()) {
+      case 'direct':
+        targetMode = Mode.direct;
+        break;
+      case 'rule':
+        targetMode = Mode.rule;
+        break;
+      case 'global':
+        targetMode = Mode.global;
+        break;
+    }
+    
+    if (targetMode != null) {
+      _ref.read(patchClashConfigProvider.notifier).updateState((state) {
+        return state.copyWith(mode: targetMode!);
+      });
+    }
+  }
+
   Future<bool> exportLogs() async {
     final logsRaw = _ref.read(logsProvider).list.map((item) => item.toString());
     final data = await Isolate.run<List<int>>(() async {

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.follow.clash.common"
+    namespace = "com.follow.clash.autoswitch.common"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

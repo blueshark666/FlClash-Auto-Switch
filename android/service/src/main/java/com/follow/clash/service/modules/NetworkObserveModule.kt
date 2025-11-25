@@ -11,6 +11,7 @@ import android.net.NetworkRequest
 import android.os.Build
 import androidx.core.content.getSystemService
 import com.follow.clash.core.Core
+import com.google.gson.Gson
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
@@ -29,6 +30,8 @@ class NetworkObserveModule(private val service: Service) : Module() {
         service.getSystemService<ConnectivityManager>()
     }
     private var preDnsList = listOf<String>()
+    private val gson = Gson()
+    private var currentIsWifi = false
 
     private val request = NetworkRequest.Builder().apply {
         addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
@@ -103,6 +106,70 @@ class NetworkObserveModule(private val service: Service) : Module() {
         }
         preDnsList = dnsList
         Core.updateDNS(dnsList.toSet().joinToString(","))
+        
+        // 检测是否连接到WiFi并切换代理
+        checkAndSwitchProxyBasedOnNetwork()
+    }
+    
+    private fun checkAndSwitchProxyBasedOnNetwork() {
+        // 获取当前最佳网络
+        val bestNetwork = networkInfos.asSequence().minByOrNull { networkToInt(it) }?.key ?: return
+        
+        // 检查是否为WiFi连接
+        val capabilities = connectivity?.getNetworkCapabilities(bestNetwork)
+        val isWifi = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        
+        // 如果网络状态发生变化且当前是WiFi连接，则切换到直连模式
+        if (isWifi && !currentIsWifi) {
+            switchToDirectMode()
+        }
+        
+        // 更新当前网络状态
+        currentIsWifi = isWifi
+    }
+    
+    private fun switchToDirectMode() {
+        // 构建切换代理的参数
+        val proxyParams = mapOf(
+            "group-name" to "GLOBAL", // 根据实际配置调整代理组名称
+            "proxy-name" to "DIRECT"
+        )
+        
+        // 构建action数据
+        val actionData = mapOf(
+            "id" to System.currentTimeMillis().toString(),
+            "method" to "changeProxy",
+            "data" to gson.toJson(proxyParams)
+        )
+        
+        // 调用Core.invokeAction方法切换到直连模式
+        Core.invokeAction(gson.toJson(actionData)) { result ->
+            // 更新通知栏显示为直连模式
+            val notificationParams = State.notificationParamsFlow.value?.copy(
+                stopText = "DIRECT Mode"
+            )
+            notificationParams?.let {
+                State.notificationParamsFlow.tryEmit(it)
+            }
+            
+            // 通过MethodChannel直接发送消息给Flutter端
+            // 这会触发Flutter端service.dart中的message处理逻辑
+            GlobalState.application?.let {
+                Handler(Looper.getMainLooper()).post {
+                    val flutterEngine = it.flutterEngine
+                    if (flutterEngine != null) {
+                        val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.follow.clash/service")
+                        
+                        val messageData = mapOf(
+                            "type" to "modeUpdate",
+                            "data" to "direct"
+                        )
+                        
+                        channel.invokeMethod("message", gson.toJson(messageData))
+                    }
+                }
+            }
+        }
     }
 
     fun setUnderlyingNetworks(network: Network) {
