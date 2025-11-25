@@ -1,59 +1,44 @@
-name: Build Android APK
+name: build-android
 
 on:
   push:
     tags:
-      - 'v*'   # 仅在推送 tag 时构建，如 v1.0.0
+      - 'v*'
+
+env:
+  IS_STABLE: ${{ !contains(github.ref, '-') }}
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          submodules: recursive
 
-      - name: Set up Flutter
+      - name: Setup Android Signing
+        run: |
+          echo "${{ secrets.KEYSTORE }}" | base64 --decode > android/app/keystore.jks
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/local.properties
+          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/local.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/local.properties
+
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.3'
-          channel: 'stable'
+          channel: stable
           cache: true
 
-      - name: Get dependencies
+      - name: Get Flutter Dependencies
         run: flutter pub get
 
-      - name: Build APK (Release)
-        run: flutter build apk --release
+      - name: Build Android APK
+        run: dart setup.dart android
 
-      # ---- Signing APK ----
-      - name: Decode keystore
-        run: echo "${{ secrets.KEYSTORE }}" | base64 --decode > keystore.jks
-
-      - name: Sign APK
-        run: |
-          cd build/app/outputs/flutter-apk/
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
-            -keystore ../../../keystore.jks \
-            -storepass "${{ secrets.STORE_PASSWORD }}" \
-            -keypass "${{ secrets.KEY_PASSWORD }}" \
-            app-release.apk ${{ secrets.KEY_ALIAS }}
-
-      - name: Zipalign
-        run: |
-          sudo apt-get install -y zipalign
-          zipalign -v 4 build/app/outputs/flutter-apk/app-release.apk app-release-aligned.apk
-
-      # ---- Upload to Release ----
-      - name: Upload Release APK
-        uses: softprops/action-gh-release@v2
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: app-release-aligned.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: android-artifact
+          path: ./dist
+          overwrite: true
