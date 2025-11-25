@@ -9,10 +9,7 @@ import android.net.NetworkCapabilities.TRANSPORT_SATELLITE
 import android.net.NetworkCapabilities.TRANSPORT_USB
 import android.net.NetworkRequest
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import androidx.core.content.getSystemService
-import androidx.lifecycle.LiveData
 import com.follow.clash.core.Core
 import com.follow.clash.service.GlobalState
 import com.google.gson.Gson
@@ -149,14 +146,6 @@ class NetworkObserveModule(private val service: Service) : Module() {
         
         // 调用Core.invokeAction方法切换到直连模式
         Core.invokeAction(gson.toJson(actionData)) { result ->
-            // 更新通知栏显示为直连模式
-            val notificationParams = GlobalState.notificationParams?.copy(
-                stopText = "DIRECT Mode"
-            )
-            notificationParams?.let {
-                GlobalState.notificationParams = it
-            }
-            
             // 通过MethodChannel直接发送消息给Flutter端
             // 这会触发Flutter端service.dart中的message处理逻辑
             GlobalState.application?.let {
