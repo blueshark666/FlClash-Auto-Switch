@@ -118,7 +118,6 @@ class NetworkObserveModule(private val service: Service) : Module() {
         checkAndSwitchProxyBasedOnNetwork()
     }
 
-    private var currentIsWifi = false
     private val gson = Gson()
 
     private var currentIsWifi: Boolean? = null // null 表示初始化
@@ -142,6 +141,37 @@ class NetworkObserveModule(private val service: Service) : Module() {
             isWifi -> true
             isCellular -> false
             else -> currentIsWifi // 其他类型不修改状态
+        }
+    }
+
+    private fun switchToDirectMode() {
+        val proxyParams = mapOf(
+            "group-name" to "GLOBAL",
+            "proxy-name" to "DIRECT"
+        )
+
+        val actionData = mapOf(
+            "id" to System.currentTimeMillis().toString(),
+            "method" to "changeProxy",
+            "data" to gson.toJson(proxyParams)
+        )
+
+        // 调用 Core 切换代理
+        Core.invokeAction(gson.toJson(actionData)) { result ->
+            // 1️⃣ 更新通知栏（如果有 NotificationParams Flow）
+            // State.notificationParamsFlow.tryEmit(...)
+
+            // 2️⃣ 发送消息给 Flutter
+//            flutterEngine?.let { engine ->
+//                Handler(Looper.getMainLooper()).post {
+//                    val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "com.follow.clash/service")
+//                    val messageData = mapOf(
+//                        "type" to "modeUpdate",
+//                        "data" to "direct"
+//                    )
+//                    channel.invokeMethod("message", gson.toJson(messageData))
+//                }
+//            }
         }
     }
 
