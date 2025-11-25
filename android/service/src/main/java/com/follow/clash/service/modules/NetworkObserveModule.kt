@@ -121,22 +121,35 @@ class NetworkObserveModule(private val service: Service) : Module() {
     private var currentIsWifi = false
     private val gson = Gson()
 
+    private var currentIsWifi: Boolean? = null // null 表示初始化
     private fun checkAndSwitchProxyBasedOnNetwork() {
         val bestNetwork = networkInfos.asSequence().minByOrNull { networkToInt(it) }?.key ?: return
         val capabilities = connectivity?.getNetworkCapabilities(bestNetwork)
         val isWifi = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        val isCellular = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
 
-        if (isWifi && !currentIsWifi) {
+        // Wi-Fi 切换逻辑
+        if (isWifi && currentIsWifi != true) {
             switchToDirectMode()
         }
 
-        currentIsWifi = isWifi
+        // 移动数据切换逻辑
+        if (isCellular && currentIsWifi != false) {
+            switchToRuleMode()
+        }
+
+        currentIsWifi = when {
+            isWifi -> true
+            isCellular -> false
+            else -> currentIsWifi // 其他类型不修改状态
+        }
     }
 
-    private fun switchToDirectMode() {
+    // 新增：切换到规则模式
+    private fun switchToRuleMode() {
         val proxyParams = mapOf(
             "group-name" to "GLOBAL",
-            "proxy-name" to "DIRECT"
+            "proxy-name" to "RULE"
         )
 
         val actionData = mapOf(
@@ -145,18 +158,14 @@ class NetworkObserveModule(private val service: Service) : Module() {
             "data" to gson.toJson(proxyParams)
         )
 
-        // 调用 Core 切换代理
         Core.invokeAction(gson.toJson(actionData)) { result ->
-            // 1️⃣ 更新通知栏（如果有 NotificationParams Flow）
-            // State.notificationParamsFlow.tryEmit(...)
-
-            // 2️⃣ 发送消息给 Flutter
+//            // 发送消息给 Flutter
 //            flutterEngine?.let { engine ->
 //                Handler(Looper.getMainLooper()).post {
 //                    val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "com.follow.clash/service")
 //                    val messageData = mapOf(
 //                        "type" to "modeUpdate",
-//                        "data" to "direct"
+//                        "data" to "rule"
 //                    )
 //                    channel.invokeMethod("message", gson.toJson(messageData))
 //                }
