@@ -11,9 +11,11 @@ import android.net.NetworkRequest
 import android.os.Build
 import androidx.core.content.getSystemService
 import com.follow.clash.core.Core
+import com.google.gson.Gson
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ConcurrentHashMap
 
 private data class NetworkInfo(
@@ -22,13 +24,21 @@ private data class NetworkInfo(
     fun isAvailable(): Boolean = losingMs < System.currentTimeMillis()
 }
 
-class NetworkObserveModule(private val service: Service) {
+class NetworkObserveModule(private val service: Service) : Module() {
 
     private val networkInfos = ConcurrentHashMap<Network, NetworkInfo>()
     private val connectivity by lazy {
         service.getSystemService<ConnectivityManager>()
     }
     private var preDnsList = listOf<String>()
+    
+    // 模式相关变量
+    private var currentModeCached: String? = null
+    private val modeLastSwitchTs = AtomicLong(0L)
+    private val MIN_MODE_SWITCH_INTERVAL_MS = 3000L // 3秒间隔限制
+    
+    // Gson实例
+    private val gson = Gson()
 
     private val request = NetworkRequest.Builder().apply {
         addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
@@ -69,7 +79,7 @@ class NetworkObserveModule(private val service: Service) {
     }
 
 
-    fun onInstall() {
+    override fun onInstall() {
         onUpdateNetwork()
         connectivity?.registerNetworkCallback(request, callback)
     }
@@ -107,8 +117,68 @@ class NetworkObserveModule(private val service: Service) {
     }
 
     private fun checkAndSwitchModeBasedOnNetwork() {
-        // 简化处理，直接打印日志
-        println("Network mode check triggered")
+        // 选取当前最佳网络
+        val bestNetwork = networkInfos.asSequence().minByOrNull { networkToInt(it) }?.key ?: return
+        val capabilities = connectivity?.getNetworkCapabilities(bestNetwork)
+        val isWifi = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        val isCellular = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
+
+        // 映射策略：WiFi -> direct, 蜂窝 -> rule, 其它 -> direct
+        val desiredMode = when {
+            isWifi -> "direct"
+            isCellular -> "rule"
+            else -> "direct"
+        }
+
+        // 如果与缓存相同，则无需下发
+        if (desiredMode == currentModeCached) return
+
+        // 去抖：最小间隔限制
+        val now = System.currentTimeMillis()
+        val last = modeLastSwitchTs.get()
+        if ((now - last) < MIN_MODE_SWITCH_INTERVAL_MS) {
+            // 太频繁，跳过
+            return
+        }
+        if (!modeLastSwitchTs.compareAndSet(last, now)) {
+            return
+        }
+
+        // 更新缓存并通过 MethodChannel 发给 Flutter 处理下发
+        currentModeCached = desiredMode
+        sendModeUpdateToFlutter(desiredMode)
+    }
+
+    private fun sendModeUpdateToFlutter(mode: String) {
+        try {
+
+            
+            val messageData = mapOf(
+                "type" to "updateConfig", // Flutter 端按 type 解析并处理
+                "data" to mapOf("mode" to mode)
+            )
+            val json = gson.toJson(messageData)
+
+            // 调用 ServicePlugin 的 notifyOutboundModeChanged 方法
+            try {
+                // 使用反射获取ServicePlugin实例并调用notifyOutboundModeChanged方法
+                val stateClass = Class.forName("com.follow.clash.State")
+                val servicePluginField = stateClass.getDeclaredField("servicePlugin")
+                servicePluginField.isAccessible = true
+                val servicePlugin = servicePluginField.get(null)
+                if (servicePlugin != null) {
+                    val notifyMethod = servicePlugin.javaClass.getDeclaredMethod("notifyOutboundModeChanged", String::class.java)
+                    notifyMethod.invoke(servicePlugin, mode)
+                }
+            } catch (e: Exception) {
+                // 记录异常但继续执行
+                e.printStackTrace()
+            }
+
+        } catch (e: Throwable) {
+            // 出错时，清除缓存以便下一次重试
+            currentModeCached = null
+        }
     }
 
     fun setUnderlyingNetworks(network: Network) {
@@ -117,7 +187,7 @@ class NetworkObserveModule(private val service: Service) {
 //        }
     }
 
-    fun onUninstall() {
+    override fun onUninstall() {
         connectivity?.unregisterNetworkCallback(callback)
         networkInfos.clear()
         onUpdateNetwork()
