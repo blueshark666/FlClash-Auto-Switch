@@ -108,6 +108,18 @@ class ServicePlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
             }
         }
     }
+    
+    /**
+     * 通知UI更新出站模式
+     * @param outboundMode 出站模式的字符串表示
+     */
+    fun notifyOutboundModeChanged(outboundMode: String?) {
+        launch(Dispatchers.Main) {
+            semaphore.withPermit {
+                flutterMethodChannel.invokeMethod("message", outboundMode)
+            }
+        }
+    }
 
     private fun onServiceDisconnected(message: String) {
         State.runStateFlow.tryEmit(RunState.STOP)
