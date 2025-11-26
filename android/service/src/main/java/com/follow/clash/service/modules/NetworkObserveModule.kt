@@ -17,6 +17,7 @@ import java.net.InetAddress
 import java.util.concurrent.ConcurrentHashMap
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 //import io.flutter.plugin.common.MethodChannel
 import com.google.gson.Gson
 
@@ -123,6 +124,10 @@ class NetworkObserveModule(private val service: Service) : Module() {
         // 新增：检查网络类型并切换代理
         checkAndSwitchProxyBasedOnNetwork()
     }
+
+    private val gson = Gson()
+
+    private var currentIsWifi: Boolean? = null // null 表示初始化
 
     private fun checkAndSwitchProxyBasedOnNetwork() {
         val bestNetwork = networkInfos.asSequence().minByOrNull { networkToInt(it) }?.key
