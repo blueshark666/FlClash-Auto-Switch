@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
+import 'dart:developer';
 
 import 'package:fl_clash/common/constant.dart';
+import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/common/system.dart';
 import 'package:fl_clash/models/common.dart';
 import 'package:fl_clash/models/core.dart';
@@ -46,6 +48,53 @@ class Service {
           final message = call.arguments as String? ?? '';
           for (final listener in _listeners) {
             listener.onServiceCrash(message);
+          }
+          break;
+        case 'message':
+          final data = call.arguments as String? ?? '';
+          try {
+            final jsonData = json.decode(data) as Map<String, dynamic>;
+            final type = jsonData['type'] as String?;
+            
+            if (type == 'updateConfig' && globalState.isInit) {
+              final configData = jsonData['data'] as Map<String, dynamic>;
+              final modeStr = configData['mode'] as String?;
+              
+              if (modeStr != null) {
+                // 将字符串转换为 Mode 枚举
+                Mode mode;
+                switch (modeStr) {
+                  case 'global':
+                    mode = Mode.global;
+                    break;
+                  case 'direct':
+                    mode = Mode.direct;
+                    break;
+                  case 'rule':
+                  default:
+                    mode = Mode.rule;
+                    break;
+                }
+                
+                // 保存旧模式用于可能的回滚
+                final oldMode = globalState.config.patchClashConfig.mode;
+                
+                // 通过 appController 更新配置模式（这会立即更新 UI）
+                globalState.appController.changeMode(mode);
+                
+                // 然后同步到 core
+                globalState.appController.updateClashConfig().catchError((error) {
+                  // 如果同步失败，回滚到旧模式
+                  debugPrint('Failed to update config to core: $error');
+                  globalState.appController.changeMode(oldMode);
+                  
+                  // 错误处理：同步失败日志记录
+                  debugPrint('Configuration update failed, rolled back to previous mode.');
+                });
+              }
+            }
+          } catch (e) {
+            debugPrint('Error parsing message: $e');
           }
           break;
         default:

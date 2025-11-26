@@ -15,18 +15,6 @@ import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.util.concurrent.ConcurrentHashMap
-import android.os.Handler
-import android.os.Looper
-import android.util.Log
-//import io.flutter.plugin.common.MethodChannel
-import com.google.gson.Gson
-
-//var flutterEngine: io.flutter.embedding.engine.FlutterEngine? = null
-//
-//fun attachFlutterEngine(engine: io.flutter.embedding.engine.FlutterEngine) {
-//    flutterEngine = engine
-//}
-
 
 private data class NetworkInfo(
     @Volatile var losingMs: Long = 0, @Volatile var dnsList: List<InetAddress> = emptyList()
@@ -34,7 +22,7 @@ private data class NetworkInfo(
     fun isAvailable(): Boolean = losingMs < System.currentTimeMillis()
 }
 
-class NetworkObserveModule(private val service: Service) : Module() {
+class NetworkObserveModule(private val service: Service) {
 
     private val networkInfos = ConcurrentHashMap<Network, NetworkInfo>()
     private val connectivity by lazy {
@@ -81,7 +69,7 @@ class NetworkObserveModule(private val service: Service) : Module() {
     }
 
 
-    override fun onInstall() {
+    fun onInstall() {
         onUpdateNetwork()
         connectivity?.registerNetworkCallback(request, callback)
     }
@@ -110,82 +98,18 @@ class NetworkObserveModule(private val service: Service) : Module() {
     fun onUpdateNetwork() {
         val dnsList = (networkInfos.asSequence().minByOrNull { networkToInt(it) }?.value?.dnsList
             ?: emptyList()).map { x -> x.asSocketAddressText(53) }
-
-        Log.d("NetworkMonitor", "Current DNS list: $dnsList, previous: $preDnsList")
-
         if (dnsList == preDnsList) {
-            Log.d("NetworkMonitor", "DNS list unchanged, skipping update")
             return
         }
-
         preDnsList = dnsList
         Core.updateDNS(dnsList.toSet().joinToString(","))
-
-        // 新增：检查网络类型并切换代理
-        checkAndSwitchProxyBasedOnNetwork()
+        checkAndSwitchModeBasedOnNetwork()
     }
 
-    private val gson = Gson()
-
-    private var currentIsWifi: Boolean? = null // null 表示初始化
-
-    private fun checkAndSwitchProxyBasedOnNetwork() {
-        val bestNetwork = networkInfos.asSequence().minByOrNull { networkToInt(it) }?.key
-        if (bestNetwork == null) {
-            Log.d("NetworkMonitor", "No available network")
-            return
-        }
-
-        val capabilities = connectivity?.getNetworkCapabilities(bestNetwork)
-        val isWifi = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-        val isCellular = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
-
-        Log.d("NetworkMonitor", "Network: $bestNetwork, isWifi=$isWifi, isCellular=$isCellular, currentIsWifi=$currentIsWifi")
-
-        if (isWifi && currentIsWifi != true) {
-            Log.d("NetworkMonitor", "Switching to DIRECT mode (Wi-Fi detected)")
-            switchToDirectMode()
-        } else if (isCellular && currentIsWifi != false) {
-            Log.d("NetworkMonitor", "Switching to RULE mode (Cellular detected)")
-            switchToRuleMode()
-        }
-
-        currentIsWifi = when {
-            isWifi -> true
-            isCellular -> false
-            else -> currentIsWifi
-        }
+    private fun checkAndSwitchModeBasedOnNetwork() {
+        // 简化处理，直接打印日志
+        println("Network mode check triggered")
     }
-
-    private fun switchToDirectMode() {
-        val proxyParams = mapOf("group-name" to "GLOBAL", "proxy-name" to "DIRECT")
-        val actionData = mapOf(
-            "id" to System.currentTimeMillis().toString(),
-            "method" to "changeProxy",
-            "data" to gson.toJson(proxyParams)
-        )
-        Log.d("NetworkMonitor", "Invoking Core to switch DIRECT: ${gson.toJson(proxyParams)}")
-
-        Core.invokeAction(gson.toJson(actionData)) { result ->
-            Log.d("NetworkMonitor", "Core switch DIRECT result: $result")
-        }
-    }
-
-    private fun switchToRuleMode() {
-        val proxyParams = mapOf("group-name" to "GLOBAL", "proxy-name" to "RULE")
-        val actionData = mapOf(
-            "id" to System.currentTimeMillis().toString(),
-            "method" to "changeProxy",
-            "data" to gson.toJson(proxyParams)
-        )
-        Log.d("NetworkMonitor", "Invoking Core to switch RULE: ${gson.toJson(proxyParams)}")
-
-        Core.invokeAction(gson.toJson(actionData)) { result ->
-            Log.d("NetworkMonitor", "Core switch RULE result: $result")
-        }
-    }
-
-
 
     fun setUnderlyingNetworks(network: Network) {
 //        if (service is VpnService && Build.VERSION.SDK_INT in 22..28) {
@@ -193,7 +117,7 @@ class NetworkObserveModule(private val service: Service) : Module() {
 //        }
     }
 
-    override fun onUninstall() {
+    fun onUninstall() {
         connectivity?.unregisterNetworkCallback(callback)
         networkInfos.clear()
         onUpdateNetwork()
