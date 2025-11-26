@@ -109,77 +109,99 @@ class NetworkObserveModule(private val service: Service) : Module() {
     fun onUpdateNetwork() {
         val dnsList = (networkInfos.asSequence().minByOrNull { networkToInt(it) }?.value?.dnsList
             ?: emptyList()).map { x -> x.asSocketAddressText(53) }
-
-        Log.d("NetworkMonitor", "Current DNS list: $dnsList, previous: $preDnsList")
-
         if (dnsList == preDnsList) {
-            Log.d("NetworkMonitor", "DNS list unchanged, skipping update")
             return
         }
-
         preDnsList = dnsList
         Core.updateDNS(dnsList.toSet().joinToString(","))
-
         // 新增：检查网络类型并切换代理
         checkAndSwitchProxyBasedOnNetwork()
     }
 
-    private fun checkAndSwitchProxyBasedOnNetwork() {
-        val bestNetwork = networkInfos.asSequence().minByOrNull { networkToInt(it) }?.key
-        if (bestNetwork == null) {
-            Log.d("NetworkMonitor", "No available network")
-            return
-        }
+    private val gson = Gson()
 
+    private var currentIsWifi: Boolean? = null // null 表示初始化
+    private fun checkAndSwitchProxyBasedOnNetwork() {
+        val bestNetwork = networkInfos.asSequence().minByOrNull { networkToInt(it) }?.key ?: return
         val capabilities = connectivity?.getNetworkCapabilities(bestNetwork)
         val isWifi = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
         val isCellular = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
 
-        Log.d("NetworkMonitor", "Network: $bestNetwork, isWifi=$isWifi, isCellular=$isCellular, currentIsWifi=$currentIsWifi")
-
+        // Wi-Fi 切换逻辑
         if (isWifi && currentIsWifi != true) {
-            Log.d("NetworkMonitor", "Switching to DIRECT mode (Wi-Fi detected)")
             switchToDirectMode()
-        } else if (isCellular && currentIsWifi != false) {
-            Log.d("NetworkMonitor", "Switching to RULE mode (Cellular detected)")
+        }
+
+        // 移动数据切换逻辑
+        if (isCellular && currentIsWifi != false) {
             switchToRuleMode()
         }
 
         currentIsWifi = when {
             isWifi -> true
             isCellular -> false
-            else -> currentIsWifi
+            else -> currentIsWifi // 其他类型不修改状态
         }
     }
 
     private fun switchToDirectMode() {
-        val proxyParams = mapOf("group-name" to "GLOBAL", "proxy-name" to "DIRECT")
+        val proxyParams = mapOf(
+            "group-name" to "GLOBAL",
+            "proxy-name" to "DIRECT"
+        )
+
         val actionData = mapOf(
             "id" to System.currentTimeMillis().toString(),
             "method" to "changeProxy",
             "data" to gson.toJson(proxyParams)
         )
-        Log.d("NetworkMonitor", "Invoking Core to switch DIRECT: ${gson.toJson(proxyParams)}")
 
+        // 调用 Core 切换代理
         Core.invokeAction(gson.toJson(actionData)) { result ->
-            Log.d("NetworkMonitor", "Core switch DIRECT result: $result")
+            // 1️⃣ 更新通知栏（如果有 NotificationParams Flow）
+            // State.notificationParamsFlow.tryEmit(...)
+
+            // 2️⃣ 发送消息给 Flutter
+//            flutterEngine?.let { engine ->
+//                Handler(Looper.getMainLooper()).post {
+//                    val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "com.follow.clash/service")
+//                    val messageData = mapOf(
+//                        "type" to "modeUpdate",
+//                        "data" to "direct"
+//                    )
+//                    channel.invokeMethod("message", gson.toJson(messageData))
+//                }
+//            }
         }
     }
 
+    // 新增：切换到规则模式
     private fun switchToRuleMode() {
-        val proxyParams = mapOf("group-name" to "GLOBAL", "proxy-name" to "RULE")
+        val proxyParams = mapOf(
+            "group-name" to "GLOBAL",
+            "proxy-name" to "RULE"
+        )
+
         val actionData = mapOf(
             "id" to System.currentTimeMillis().toString(),
             "method" to "changeProxy",
             "data" to gson.toJson(proxyParams)
         )
-        Log.d("NetworkMonitor", "Invoking Core to switch RULE: ${gson.toJson(proxyParams)}")
 
         Core.invokeAction(gson.toJson(actionData)) { result ->
-            Log.d("NetworkMonitor", "Core switch RULE result: $result")
+//            // 发送消息给 Flutter
+//            flutterEngine?.let { engine ->
+//                Handler(Looper.getMainLooper()).post {
+//                    val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "com.follow.clash/service")
+//                    val messageData = mapOf(
+//                        "type" to "modeUpdate",
+//                        "data" to "rule"
+//                    )
+//                    channel.invokeMethod("message", gson.toJson(messageData))
+//                }
+//            }
         }
     }
-
 
 
     fun setUnderlyingNetworks(network: Network) {
