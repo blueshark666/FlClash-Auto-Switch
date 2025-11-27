@@ -12,6 +12,7 @@ enum class QuickAction {
 enum class BroadcastAction {
     SERVICE_CREATED,
     SERVICE_DESTROYED,
+    OUTBOUND_MODE_CHANGED
 }
 
 enum class AccessControlMode {

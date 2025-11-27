@@ -24,6 +24,14 @@ class BroadcastReceiver : BroadcastReceiver() {
                     State.handleStopServiceAction()
                 }
             }
+
+            BroadcastAction.OUTBOUND_MODE_CHANGED.action -> {
+                val mode = intent.getStringExtra("mode") ?: return
+                GlobalState.log("Receiver outbound mode changed: $mode")
+                GlobalState.launch {
+                    State.servicePlugin?.notifyOutboundModeChanged(mode)
+                }
+            }
         }
     }
 }

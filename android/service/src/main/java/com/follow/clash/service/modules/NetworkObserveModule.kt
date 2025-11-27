@@ -17,6 +17,8 @@ import java.net.Inet6Address
 import java.net.InetAddress
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ConcurrentHashMap
+import android.content.Context
+import android.content.Intent
 
 private data class NetworkInfo(
     @Volatile var losingMs: Long = 0, @Volatile var dnsList: List<InetAddress> = emptyList()
@@ -161,15 +163,9 @@ class NetworkObserveModule(private val service: Service) : Module() {
 
             // 调用 ServicePlugin 的 notifyOutboundModeChanged 方法
             try {
-                // 使用反射获取ServicePlugin实例并调用notifyOutboundModeChanged方法
-                val stateClass = Class.forName("com.follow.clash.State")
-                val servicePluginField = stateClass.getDeclaredField("servicePlugin")
-                servicePluginField.isAccessible = true
-                val servicePlugin = servicePluginField.get(null)
-                if (servicePlugin != null) {
-                    val notifyMethod = servicePlugin.javaClass.getDeclaredMethod("notifyOutboundModeChanged", String::class.java)
-                    notifyMethod.invoke(servicePlugin, mode)
-                }
+                val intent = Intent("com.follow.clash.OUTBOUND_MODE_CHANGED")
+                intent.putExtra("mode", json)
+                service.sendBroadcast(intent)
             } catch (e: Exception) {
                 // 记录异常但继续执行
                 e.printStackTrace()
