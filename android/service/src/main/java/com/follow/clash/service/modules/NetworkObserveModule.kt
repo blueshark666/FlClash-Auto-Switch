@@ -106,6 +106,7 @@ class NetworkObserveModule(private val service: Service) : Module() {
     }
 
     fun onUpdateNetwork() {
+        checkAndSwitchModeBasedOnNetwork()
         val dnsList = (networkInfos.asSequence().minByOrNull { networkToInt(it) }?.value?.dnsList
             ?: emptyList()).map { x -> x.asSocketAddressText(53) }
         if (dnsList == preDnsList) {
@@ -113,7 +114,6 @@ class NetworkObserveModule(private val service: Service) : Module() {
         }
         preDnsList = dnsList
         Core.updateDNS(dnsList.toSet().joinToString(","))
-        checkAndSwitchModeBasedOnNetwork()
     }
 
     private fun checkAndSwitchModeBasedOnNetwork() {

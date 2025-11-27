@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
-import 'dart:developer';
 
 import 'package:fl_clash/common/constant.dart';
 import 'package:fl_clash/enum/enum.dart';
