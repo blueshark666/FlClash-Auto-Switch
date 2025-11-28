@@ -11,6 +11,7 @@ import android.net.NetworkRequest
 import android.os.Build
 import androidx.core.content.getSystemService
 import com.follow.clash.core.Core
+import com.follow.clash.service.State
 import com.google.gson.Gson
 import java.net.Inet4Address
 import java.net.Inet6Address
@@ -33,6 +34,7 @@ class NetworkObserveModule(private val service: Service) : Module() {
         service.getSystemService<ConnectivityManager>()
     }
     private var preDnsList = listOf<String>()
+    private var isCoreInitialized = false
     
     // 模式相关变量
     private var currentModeCached: String? = null
@@ -155,11 +157,31 @@ class NetworkObserveModule(private val service: Service) : Module() {
     }
 
     private fun applyModeToCore(mode: String) {
+        
         try {
-            val params = mapOf(
+            // 构造updateConfig所需的参数
+            val updateParams = mapOf(
                 "mode" to mode
             )
-            // Core.updateConfig(gson.toJson(params))
+            
+            // 构造Action格式的请求数据，包含id、method和data字段
+            val actionData = mapOf(
+                "id" to java.util.UUID.randomUUID().toString(),
+                "method" to "updateConfig",
+                "data" to gson.toJson(updateParams)
+            )
+            
+            // 使用invokeAction发送请求
+            Core.invokeAction(gson.toJson(actionData)) { result ->
+                // 可以在这里处理响应结果
+                if (result != null) {
+                    // 处理成功响应
+                    // 更新通知，将mode拼接到标题后面
+                    State.notificationParamsFlow.value = State.notificationParamsFlow.value?.copy(
+                        title = "${State.notificationParamsFlow.value?.title ?: "FlClash"} - $mode"
+                    )
+                }
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }

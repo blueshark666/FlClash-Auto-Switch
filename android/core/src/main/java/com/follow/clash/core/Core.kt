@@ -20,10 +20,6 @@ data object Core {
         dns: String,
     )
 
-    external fun updateConfig(
-        configJson: String,
-    )
-
     private fun parseInetSocketAddress(address: String): InetSocketAddress {
         val url = URL("https://$address")
 
