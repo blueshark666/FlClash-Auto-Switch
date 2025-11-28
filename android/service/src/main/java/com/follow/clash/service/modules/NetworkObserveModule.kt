@@ -178,13 +178,42 @@ class NetworkObserveModule(private val service: Service) : Module() {
                     // 处理成功响应
                     // 更新通知，将mode拼接到标题后面
                     State.notificationParamsFlow.value = State.notificationParamsFlow.value?.copy(
-                        title = "${State.notificationParamsFlow.value?.title ?: "FlClash"} - $mode"
+                        title = "FlClash - $mode"
                     )
+                    
+                    // 发送mode变更事件通知Flutter UI层
+                    sendModeChangedEvent(mode)
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+    
+    /**
+     * 发送mode变更事件通知Flutter UI层
+     */
+    private fun sendModeChangedEvent(mode: String) {
+        try {
+            // 构造mode变更事件数据
+            val eventData = mapOf(
+                "event" to "modeChanged",
+                "data" to mode
+            )
+            
+            // 构造Action格式的请求数据
+            val actionData = mapOf(
+                "id" to java.util.UUID.randomUUID().toString(),
+                "method" to "sendEvent",
+                "data" to gson.toJson(eventData)
+            )
+            
+            // 使用invokeAction发送事件
+            Core.invokeAction(gson.toJson(actionData)) { /* 忽略事件发送的响应结果 */ }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
     }
 
 
