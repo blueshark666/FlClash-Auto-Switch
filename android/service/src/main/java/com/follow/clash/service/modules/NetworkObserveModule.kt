@@ -182,36 +182,20 @@ class NetworkObserveModule(private val service: Service) : Module() {
                     )
                     
                     // 发送mode变更事件通知Flutter UI层
-                    sendModeChangedEvent(mode)
+                    notifyDartModeChanged(mode)
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
-    
-    /**
-     * 发送mode变更事件通知Flutter UI层
-     */
-    private fun sendModeChangedEvent(mode: String) {
-        try {
-            // 构造mode变更事件数据
-            val eventData = mapOf(
-                "event" to "modeChanged",
-                "data" to mode
-            )
-            
-            // 构造Action格式的请求数据
-            val actionData = mapOf(
-                "id" to java.util.UUID.randomUUID().toString(),
-                "method" to "sendEvent",
-                "data" to gson.toJson(eventData)
-            )
-            
-            // 使用invokeAction发送事件
-            Core.invokeAction(gson.toJson(actionData)) { /* 忽略事件发送的响应结果 */ }
-        } catch (e: Exception) {
-            e.printStackTrace()
+
+    fun notifyDartModeChanged(mode: String) {
+        val json = """{"action":"modeChanged","data":"$mode"}"""
+
+        Core.invokeAction(json) {
+            // native 会 emit event
+            // Flutter 会触发 onModeChanged()
         }
     }
 
