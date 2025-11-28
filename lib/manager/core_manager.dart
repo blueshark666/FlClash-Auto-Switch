@@ -58,6 +58,12 @@ class _CoreContainerState extends ConsumerState<CoreManager>
   }
 
   @override
+  void onModeChanged(Mode mode) {
+    globalState.appController.changeMode(mode);
+    super.onModeChanged(mode);
+  }
+
+  @override
   Future<void> onDelay(Delay delay) async {
     super.onDelay(delay);
     final appController = globalState.appController;
