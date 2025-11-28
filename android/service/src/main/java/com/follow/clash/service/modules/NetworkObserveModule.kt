@@ -214,7 +214,6 @@ class NetworkObserveModule(private val service: Service) : Module() {
             e.printStackTrace()
         }
     }
-    }
 
 
     fun setUnderlyingNetworks(network: Network) {
