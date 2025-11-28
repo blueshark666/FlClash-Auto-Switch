@@ -159,7 +159,7 @@ class NetworkObserveModule(private val service: Service) : Module() {
             val params = mapOf(
                 "mode" to mode
             )
-            Core.updateConfig(gson.toJson(params))
+            // Core.updateConfig(gson.toJson(params))
         } catch (e: Exception) {
             e.printStackTrace()
         }
