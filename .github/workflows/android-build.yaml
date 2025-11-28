@@ -1,49 +1,59 @@
+name: build-android
+
+on:
+  push:
+    tags:
+      - 'v*'
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+      # --- Checkout 项目 ---
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      # ----------- 缓存加速：Android SDK / NDK -----------
-      - name: Cache Android SDK
+      # --- 缓存 Flutter SDK ---
+      - name: Cache Flutter SDK
+        id: flutter_cache
+        uses: actions/cache@v3
+        with:
+          path: /opt/hostedtoolcache/flutter
+          key: flutter-sdk-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+
+      # --- 安装 Flutter（可跳过重复安装） ---
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false   # ⚠ 关闭自带缓存，避免冲突
+
+      # --- 缓存 Pub / Dart ---
+      - name: Cache Pub
         uses: actions/cache@v3
         with:
           path: |
-            ~/.android
-            $ANDROID_HOME/ndk
-            $ANDROID_HOME/platforms
-            $ANDROID_HOME/build-tools
-            $ANDROID_HOME/cmake
-          key: android-sdk-${{ hashFiles('android/app/build.gradle') }}
-          restore-keys: android-sdk-
+            ~/.pub-cache
+            .dart_tool
+          key: pub-${{ hashFiles('pubspec.lock') }}
 
-      # ----------- 缓存加速：Go 构建（libclash.so） -----------
-      - name: Cache Go Build
+      - name: Flutter pub get
+        run: flutter pub get
+
+      # --- 缓存 Go 模块（libclash.so 编译加速） ---
+      - name: Cache Go build
         uses: actions/cache@v3
         with:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: go-cache-${{ hashFiles('core/go.sum') }}
-          restore-keys: go-cache-
+          key: go-${{ hashFiles('core/go.sum') }}
+          restore-keys: go-
 
-      # ----------- 缓存加速：Flutter/Dart 编译缓存 -----------
-      - name: Cache Flutter Build
-        uses: actions/cache@v3
-        with:
-          path: |
-            .dart_tool
-            build
-            ~/.pub-cache
-            ${{ runner.tool_cache }}/flutter
-          key: flutter-build-${{ hashFiles('pubspec.lock') }}
-          restore-keys: flutter-build-
-
-      # ----------- 缓存 Gradle -----------
+      # --- 缓存 Gradle ---
       - name: Cache Gradle
         uses: actions/cache@v3
         with:
@@ -52,3 +62,70 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ hashFiles('**/*.gradle*') }}
           restore-keys: gradle-
+
+      # --- 签名文件 ---
+      - name: Setup Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE }}" | base64 --decode > android/app/keystore.jks
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/local.properties
+          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/local.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/local.properties
+
+      # --- 构建 APK（含 Go 内核编译） ---
+      - name: Build Android APK
+        run: dart setup.dart android --arch=arm64
+
+      # --- 上传构建产物 ---
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-artifact
+          path: ./dist
+          overwrite: true
+
+
+  release:
+    needs: [build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-artifact
+          path: ./dist
+
+      - name: Create Release Notes
+        run: |
+          tags=($(git tag --merged $(git rev-parse HEAD) --sort=-creatordate))
+          preTag=$(curl --silent "https://api.github.com/repos/${{ github.repository }}/releases/latest" \
+                   | grep -Po '"tag_name": "\K.*?(?=")' || echo "")
+          currentTag=""
+          > release.md
+          for ((i = 0; i <= ${#tags[@]}; i++)); do
+            if (( i < ${#tags[@]} )); then tag=${tags[$i]}; else tag=""; fi
+            if [ -n "$currentTag" ]; then
+              if [ "$(echo -e "$currentTag\n$preTag" | sort -V | head -n 1)" == "$currentTag" ]; then break; fi
+            fi
+            if [ -n "$currentTag" ]; then
+              if [ -n "$tag" ]; then
+                git log --pretty=format:"%B" "$tag..$currentTag" | awk 'NF {print "- " $0} !NF {print ""}' >> release.md
+              else
+                git log --pretty=format:"%B" "$currentTag" | awk 'NF {print "- " $0} !NF {print ""}' >> release.md
+              fi
+            fi
+            currentTag=$tag
+          done
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./dist/*
+          body_path: release.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
