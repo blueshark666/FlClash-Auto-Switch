@@ -11,12 +11,34 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      # -------------------- 缓存 Flutter & Gradle --------------------
+      - name: Cache Flutter Pub
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pub-cache
+          key: flutter-pub-${{ hashFiles('**/pubspec.yaml') }}
+          restore-keys: |
+            flutter-pub-
+
+      - name: Cache Gradle
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: |
+            gradle-
+
+      # -------------------- Android Signing --------------------
       - name: Setup Android Signing
         run: |
           echo "${{ secrets.KEYSTORE }}" | base64 --decode > android/app/keystore.jks
@@ -24,6 +46,7 @@ jobs:
           echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/local.properties
           echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/local.properties
 
+      # -------------------- Flutter Setup --------------------
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -33,12 +56,60 @@ jobs:
       - name: Get Flutter Dependencies
         run: flutter pub get
 
+      # -------------------- Build Android APK --------------------
       - name: Build Android APK
         run: dart setup.dart android
 
+      # -------------------- Upload APK Artifact --------------------
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-artifact
           path: ./dist
           overwrite: true
+
+  release:
+    needs: [build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-artifact
+          path: ./dist
+
+      - name: Generate release.md
+        run: |
+          tags=($(git tag --merged $(git rev-parse HEAD) --sort=-creatordate))
+          preTag=$(curl --silent "https://api.github.com/repos/${{ github.repository }}/releases/latest" \
+                   | grep -Po '"tag_name": "\K.*?(?=")' || echo "")
+          currentTag=""
+          > release.md
+          for ((i = 0; i <= ${#tags[@]}; i++)); do
+            if (( i < ${#tags[@]} )); then tag=${tags[$i]}; else tag=""; fi
+            if [ -n "$currentTag" ]; then
+              if [ "$(echo -e "$currentTag\n$preTag" | sort -V | head -n 1)" == "$currentTag" ]; then break; fi
+            fi
+            if [ -n "$currentTag" ]; then
+              if [ -n "$tag" ]; then
+                git log --pretty=format:"%B" "$tag..$currentTag" | awk 'NF {print "- " $0} !NF {print ""}' >> release.md
+              else
+                git log --pretty=format:"%B" "$currentTag" | awk 'NF {print "- " $0} !NF {print ""}' >> release.md
+              fi
+            fi
+            currentTag=$tag
+          done
+
+      - name: Push to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./dist/*
+          body_path: release.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
