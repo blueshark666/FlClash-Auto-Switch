@@ -11,10 +11,14 @@ import android.net.NetworkRequest
 import android.os.Build
 import androidx.core.content.getSystemService
 import com.follow.clash.core.Core
+import com.google.gson.Gson
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ConcurrentHashMap
+import android.content.Context
+import android.content.Intent
 
 private data class NetworkInfo(
     @Volatile var losingMs: Long = 0, @Volatile var dnsList: List<InetAddress> = emptyList()
@@ -29,6 +33,14 @@ class NetworkObserveModule(private val service: Service) : Module() {
         service.getSystemService<ConnectivityManager>()
     }
     private var preDnsList = listOf<String>()
+    
+    // 模式相关变量
+    private var currentModeCached: String? = null
+    private val modeLastSwitchTs = AtomicLong(0L)
+    private val MIN_MODE_SWITCH_INTERVAL_MS = 3000L // 3秒间隔限制
+    
+    // Gson实例
+    private val gson = Gson()
 
     private val request = NetworkRequest.Builder().apply {
         addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
@@ -96,6 +108,9 @@ class NetworkObserveModule(private val service: Service) : Module() {
     }
 
     fun onUpdateNetwork() {
+        
+        checkAndSwitchModeBasedOnNetwork()
+
         val dnsList = (networkInfos.asSequence().minByOrNull { networkToInt(it) }?.value?.dnsList
             ?: emptyList()).map { x -> x.asSocketAddressText(53) }
         if (dnsList == preDnsList) {
@@ -104,6 +119,52 @@ class NetworkObserveModule(private val service: Service) : Module() {
         preDnsList = dnsList
         Core.updateDNS(dnsList.toSet().joinToString(","))
     }
+
+    private fun checkAndSwitchModeBasedOnNetwork() {
+        // 选取当前最佳网络
+        val bestNetwork = networkInfos.asSequence().minByOrNull { networkToInt(it) }?.key ?: return
+        val capabilities = connectivity?.getNetworkCapabilities(bestNetwork)
+        val isWifi = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        val isCellular = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
+
+        // 映射策略：WiFi -> direct, 蜂窝 -> rule, 其它 -> direct
+        val desiredMode = when {
+            isWifi -> "direct"
+            isCellular -> "rule"
+            else -> "direct"
+        }
+
+        // 如果与缓存相同，则无需下发
+        if (desiredMode == currentModeCached) return
+
+        // 去抖：最小间隔限制
+        val now = System.currentTimeMillis()
+        val last = modeLastSwitchTs.get()
+        if ((now - last) < MIN_MODE_SWITCH_INTERVAL_MS) {
+            // 太频繁，跳过
+            return
+        }
+        if (!modeLastSwitchTs.compareAndSet(last, now)) {
+            return
+        }
+
+        // 更新缓存并通过 MethodChannel 发给 Flutter 处理下发
+        currentModeCached = desiredMode
+
+        applyModeToCore(desiredMode)
+    }
+
+    private fun applyModeToCore(mode: String) {
+        try {
+            val params = mapOf(
+                "mode" to mode
+            )
+            Core.updateConfig(params)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
 
     fun setUnderlyingNetworks(network: Network) {
 //        if (service is VpnService && Build.VERSION.SDK_INT in 22..28) {
