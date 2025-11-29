@@ -191,7 +191,7 @@ class NetworkObserveModule(private val service: Service) : Module() {
     }
 
     fun notifyDartModeChanged(mode: String) {
-        val json = """{"action":"modeChanged","data":"$mode"}"""
+        val json = """{"method":"modeChanged","data":"$mode"}"""
 
         Core.invokeAction(json) {
             // native 会 emit event

@@ -257,7 +257,6 @@ enum ActionMethod {
   deleteFile,
 
   ///Android,
-  modeChanged,
   setState,
   startTun,
   stopTun,
