@@ -191,14 +191,19 @@ class NetworkObserveModule(private val service: Service) : Module() {
     }
 
     fun notifyDartModeChanged(mode: String) {
-        val json = """{"method":"modeChanged","data":"$mode"}"""
+        val json = """
+            {
+                "id": "${UUID.randomUUID()}",
+                "method": "modeChanged",
+                "data": "$mode"
+            }
+        """.trimIndent()
 
         Core.invokeAction(json) {
             // native 会 emit event
-            // Flutter 会触发 onModeChanged()
+            Log.d("CoreEvent", "Sent modeChanged event to Flutter: $mode")
         }
     }
-
 
     fun setUnderlyingNetworks(network: Network) {
 //        if (service is VpnService && Build.VERSION.SDK_INT in 22..28) {
