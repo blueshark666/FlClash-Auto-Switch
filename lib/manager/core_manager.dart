@@ -59,6 +59,7 @@ class _CoreContainerState extends ConsumerState<CoreManager>
 
   @override
   void onModeChanged(Mode mode) {
+    globalState.showNotifier('模式已更改为: ${mode.name}');
     globalState.appController.changeMode(mode);
     super.onModeChanged(mode);
   }
