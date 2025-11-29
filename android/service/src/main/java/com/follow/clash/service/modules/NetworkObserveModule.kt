@@ -193,7 +193,7 @@ class NetworkObserveModule(private val service: Service) : Module() {
     fun notifyDartModeChanged(mode: String) {
         val json = """
             {
-                "id": "${UUID.randomUUID()}",
+                "id": "${java.util.UUID.randomUUID().toString()}",
                 "type": "modeChanged",
                 "method": "modeChanged",
                 "data": "$mode"
