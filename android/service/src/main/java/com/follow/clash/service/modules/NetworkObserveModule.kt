@@ -202,7 +202,7 @@ class NetworkObserveModule(private val service: Service) : Module() {
 
         Core.invokeAction(json) {
             // native 会 emit event
-            Log.d("CoreEvent", "Sent modeChanged event to Flutter: $mode")
+  
         }
     }
 
