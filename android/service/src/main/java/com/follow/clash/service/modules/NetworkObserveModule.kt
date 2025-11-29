@@ -194,6 +194,7 @@ class NetworkObserveModule(private val service: Service) : Module() {
         val json = """
             {
                 "id": "${UUID.randomUUID()}",
+                "type": "modeChanged",
                 "method": "modeChanged",
                 "data": "$mode"
             }
