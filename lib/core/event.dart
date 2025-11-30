@@ -14,8 +14,6 @@ abstract mixin class CoreEventListener {
   void onLoaded(String providerName) {}
 
   void onCrash(String message) {}
-
-  void onModeChanged(Mode mode) {}
 }
 
 class CoreEventManager {
@@ -39,9 +37,6 @@ class CoreEventManager {
             break;
           case CoreEventType.crash:
             listener.onCrash(event.data);
-            break;
-          case CoreEventType.modeChanged:
-            listener.onModeChanged(ModeExtension.fromString(event.data));
             break;
         }
       }
