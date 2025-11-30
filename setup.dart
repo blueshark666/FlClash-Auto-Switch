@@ -150,10 +150,20 @@ class Build {
       runInShell: runInShell,
     );
     process.stdout.listen((data) {
-      print(utf8.decode(data));
+      try {
+        print(utf8.decode(data));
+      } catch (e) {
+        // 如果UTF-8解码失败，尝试使用latin1解码（更安全的回退选项）
+        print(String.fromCharCodes(data));
+      }
     });
     process.stderr.listen((data) {
-      print(utf8.decode(data));
+      try {
+        print(utf8.decode(data));
+      } catch (e) {
+        // 如果UTF-8解码失败，尝试使用latin1解码（更安全的回退选项）
+        print(String.fromCharCodes(data));
+      }
     });
     final exitCode = await process.exitCode;
     if (exitCode != 0 && name != null) throw '$name error';

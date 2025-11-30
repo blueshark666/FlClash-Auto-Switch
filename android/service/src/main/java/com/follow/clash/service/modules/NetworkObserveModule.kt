@@ -20,6 +20,8 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ConcurrentHashMap
 import android.content.Context
 import android.content.Intent
+import com.follow.clash.common.GlobalState
+import android.util.Log
 
 private data class NetworkInfo(
     @Volatile var losingMs: Long = 0, @Volatile var dnsList: List<InetAddress> = emptyList()
@@ -191,19 +193,11 @@ class NetworkObserveModule(private val service: Service) : Module() {
     }
 
     fun notifyDartModeChanged(mode: String) {
-        val json = """
-            {
-                "id": "${java.util.UUID.randomUUID().toString()}",
-                "type": "modeChanged",
-                "method": "modeChanged",
-                "data": "$mode"
-            }
-        """.trimIndent()
-
-        Core.invokeAction(json) {
-            // native 会 emit event
-  
-        }
+        val intent = Intent("flclash.service.to.flutter")
+        intent.putExtra("event", "modeChanged")
+        intent.putExtra("data", mode)
+        intent.setPackage(service.packageName)  // ← 必须加
+        service.sendBroadcast(intent)
     }
 
     fun setUnderlyingNetworks(network: Network) {

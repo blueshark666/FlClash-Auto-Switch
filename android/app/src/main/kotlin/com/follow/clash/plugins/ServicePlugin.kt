@@ -20,20 +20,60 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
+import android.util.Log
 
 class ServicePlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
     CoroutineScope by CoroutineScope(SupervisorJob() + Dispatchers.Default) {
     private lateinit var flutterMethodChannel: MethodChannel
+    private var receiver: BroadcastReceiver? = null   // ← 保存为类成员
+
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         flutterMethodChannel = MethodChannel(
             flutterPluginBinding.binaryMessenger, "${Components.PACKAGE_NAME}/service"
         )
         flutterMethodChannel.setMethodCallHandler(this)
+
+        // Step 1: 创建并注册 BroadcastReceiver
+        receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                val event = intent?.getStringExtra("event")
+                val mode = intent?.getStringExtra("data")
+
+                // Step 2: 转发给 Flutter UI
+                flutterMethodChannel.invokeMethod("modeChangedToFlutter", mode)
+            }
+        }
+
+        // Step 3: 注册接收器，过滤特定广播
+        val filter = IntentFilter("flclash.service.to.flutter")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            receiver?.let {
+                flutterPluginBinding.applicationContext.registerReceiver(
+                    it,
+                    filter,
+                    Context.RECEIVER_NOT_EXPORTED // ⚠ Android 12+ 必须加
+                )
+            }
+        } else {
+            receiver?.let {
+                flutterPluginBinding.applicationContext.registerReceiver(it, filter)
+            }
+        }
     }
 
     override fun onDetachedFromEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         flutterMethodChannel.setMethodCallHandler(null)
+                // 重要：注销广播
+        receiver?.let {
+            flutterPluginBinding.applicationContext?.unregisterReceiver(it)
+        }
+        receiver = null
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) = when (call.method) {

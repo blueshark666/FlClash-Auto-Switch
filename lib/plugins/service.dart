@@ -2,13 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
 
-import 'package:fl_clash/common/constant.dart';
-import 'package:fl_clash/common/system.dart';
 import 'package:fl_clash/models/common.dart';
 import 'package:fl_clash/models/core.dart';
 import 'package:fl_clash/state.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:fl_clash/enum/enum.dart';
+import 'package:fl_clash/common/common.dart';
 
 abstract mixin class ServiceListener {
   void onServiceEvent(CoreEvent event) {}
@@ -47,6 +47,10 @@ class Service {
           for (final listener in _listeners) {
             listener.onServiceCrash(message);
           }
+          break;
+        case 'modeChangedToFlutter':
+          final mode = call.arguments as String? ?? '';
+          globalState.appController.changeMode(ModeExtension.fromString(mode));
           break;
         default:
           throw MissingPluginException();
