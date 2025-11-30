@@ -85,6 +85,16 @@ extension UsedProxyExtension on UsedProxy {
 }
 
 enum Mode { rule, global, direct }
+extension ModeExtension on Mode {
+  static Mode fromString(String value) {
+    return switch (value) {
+      'rule' => Mode.rule,
+      'global' => Mode.global,
+      'direct' => Mode.direct,
+      _ => throw ArgumentError('Invalid mode string: $value')
+    };
+  }
+}
 
 enum ViewMode { mobile, laptop, desktop }
 
