@@ -6,7 +6,7 @@
 
 ## FlClash
 
-FlClash特殊场景修改版，换到wifi以后，自动切换到直连，切换到移动数据，自动切换到规则出站
+FlClash特殊场景修改版，换到wifi以后，自动切换到直连，切换到移动数据，自动切换到规则出站，主要用于手机免流
 
 [![Downloads](https://img.shields.io/github/downloads/chen08209/FlClash/total?style=flat-square&logo=github)](https://github.com/chen08209/FlClash/releases/)[![Last Version](https://img.shields.io/github/release/chen08209/FlClash/all.svg?style=flat-square)](https://github.com/chen08209/FlClash/releases/)[![License](https://img.shields.io/github/license/chen08209/FlClash?style=flat-square)](LICENSE)
 
